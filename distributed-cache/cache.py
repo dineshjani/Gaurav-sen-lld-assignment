@@ -17,10 +17,8 @@ from heapq import heappop, heappush
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor
 
-
 TKey = TypeVar('TKey')
 TValue = TypeVar('TValue')
-
 
 class Cache:
     def __init__(self, maximum_size, expiry_time, fetch_algorithm, eviction_algorithm, data_source, keys_to_eagerly_load, timer, pool_size):
@@ -36,6 +34,9 @@ class Cache:
         self.priority_queue = []
         self.expiry_queue = defaultdict(set)
 
+        # Dictionary to map keys to specific executor threads
+        self.key_to_executor = {}
+
         for key in keys_to_eagerly_load:
             asyncio.run(self.add_to_cache(key, self.load_from_db(data_source, key)))
 
@@ -43,6 +44,9 @@ class Cache:
         await self.manage_entries()
         record_future = asyncio.create_task(value_future)
         self.cache[key] = record_future
+        # Selecting executor thread based on key hash
+        executor_index = abs(hash(key)) % len(self.executor_pool)
+        self.key_to_executor[key] = self.executor_pool[executor_index]
         record = await record_future
         return record
 
